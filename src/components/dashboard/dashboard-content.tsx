@@ -48,6 +48,7 @@ import { useScanner } from '@/hooks/use-scanner';
 import { useScenarios } from '@/hooks/use-scenarios';
 import { useTaxPrep } from '@/hooks/use-tax-prep';
 import { computeProjections } from '@/lib/tax/projections';
+import { CURRENT_TAX_MODEL_VERSION } from '@/lib/tax/run-calculators';
 import { STALENESS_THRESHOLDS } from '@/lib/constants';
 import { formatCurrency, cn } from '@/lib/utils';
 import type { FilingStatus, Job } from '@/lib/types';
@@ -62,7 +63,7 @@ export function DashboardContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { jobs, isLoading: jobsLoading, error: jobsError } = useJobs();
-  const { data: latestSnapshots, isLoading: snapshotsLoading } = useLatestSnapshots();
+  const { data: latestSnapshots, isLoading: snapshotsLoading } = useLatestSnapshots(TAX_YEAR);
   const { entries: w2Entries } = useW2Entries();
   // W2 year analysis
   const w2Years = useMemo(() => {
@@ -94,9 +95,9 @@ export function DashboardContent() {
 
   // Saved calculator result (persisted to DB for all users)
   const latestSavedCalc = useMemo(() => {
-    return savedCalcs.find((c) => c.source === 'calculator');
-  }, [savedCalcs]);
-  const displayResult = result ?? latestSavedCalc?.resultData ?? null;
+    return savedCalcs.find((c) => c.source === 'calculator' && c.resultData?.modelVersion === CURRENT_TAX_MODEL_VERSION && c.inputData?.taxYear === Number(effectiveW2Year));
+  }, [savedCalcs, effectiveW2Year]);
+  const displayResult = result?.input.taxYear === Number(effectiveW2Year) ? result : latestSavedCalc?.resultData ?? null;
 
   // Staleness detection
   const filingStatusChanged = useMemo(() => {
@@ -131,7 +132,7 @@ export function DashboardContent() {
     setPrevProfileSyncKey(profileSyncKey);
     setFilingStatus(selectedTaxProfile.filing_status as FilingStatus);
     setCtcChildren(selectedTaxProfile.child_tax_credit_eligible ?? 0);
-    setOtherDeps(Math.max(0, (selectedTaxProfile.dependents ?? 0) - (selectedTaxProfile.child_tax_credit_eligible ?? 0)));
+    setOtherDeps(0);
     setUseStandardDeduction(selectedTaxProfile.use_standard_deduction ?? true);
     setItemizedAmount(selectedTaxProfile.itemized_deduction_amount ?? 0);
   }
@@ -260,7 +261,7 @@ export function DashboardContent() {
       (selectedTaxProfile?.use_standard_deduction === false) ? (selectedTaxProfile?.itemized_deduction_amount ?? 0) : undefined,
       totalQuarterlyPayments,
       selectedTaxProfile?.child_tax_credit_eligible ?? undefined,
-      selectedTaxProfile?.dependents != null ? Math.max(0, (selectedTaxProfile.dependents) - (selectedTaxProfile.child_tax_credit_eligible ?? 0)) : undefined,
+      undefined, // Other dependent credits must be explicitly confirmed.
     );
   }, [w2JobsForYear, profile, showFilingForm, filingStatus, dependents, totalQuarterlyPayments, runW2Calc, selectedTaxProfile]);
 
@@ -648,7 +649,7 @@ export function DashboardContent() {
                         </span>
                       </div>
                     )}
-                    {displayResult.w4.adjustments.some((a) => a.recommendedExtraWithholding > 0) && (() => {
+                    {displayResult.w4.recommendationStatus === 'projected' && displayResult.w4.adjustments.some((a) => a.recommendedExtraWithholding > 0) && (() => {
                       const adj = displayResult.w4.adjustments.find((a) => a.recommendedExtraWithholding > 0)!;
                       return (
                         <div className="flex justify-between">
@@ -782,7 +783,7 @@ export function DashboardContent() {
             const staleCount = staleJobIds.size;
 
             const dashProjection = hasSnapshots
-              ? computeProjections(jobs, snapMap, taxProfile2026?.filing_status ?? profile?.filing_status ?? 'single', taxProfile2026?.dependents ?? profile?.dependents ?? 0, taxProfile2026?.use_standard_deduction ?? profile?.use_standard_deduction ?? true, totalQuarterlyPayments2026, (taxProfile2026?.use_standard_deduction ?? true) ? 0 : Number(taxProfile2026?.itemized_deduction_amount ?? 0))
+              ? computeProjections(jobs, snapMap, taxProfile2026?.filing_status ?? profile?.filing_status ?? 'single', taxProfile2026?.dependents ?? profile?.dependents ?? 0, taxProfile2026?.use_standard_deduction ?? profile?.use_standard_deduction ?? true, totalQuarterlyPayments2026, (taxProfile2026?.use_standard_deduction ?? true) ? 0 : Number(taxProfile2026?.itemized_deduction_amount ?? 0), TAX_YEAR, taxProfile2026?.child_tax_credit_eligible ?? 0)
               : null;
 
             const projectedAnnualIncome = dashProjection?.jobProjections.reduce((s, j) => s + j.projectedGross, 0) ?? 0;

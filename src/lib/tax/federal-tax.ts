@@ -9,7 +9,7 @@ import type { CalculationInput, FederalTaxResult, TaxBracketBreakdown } from '..
 import { getAboveTheLineDeductions } from './w2-helpers';
 
 /**
- * Calculates complete federal income tax liability for combined W2 income.
+ * Estimates regular federal income tax on ordinary W-2 wages.
  *
  * Steps:
  * 1. Sum all job salaries → total income
@@ -55,11 +55,13 @@ export function calculateFederalTax(input: CalculationInput): FederalTaxResult {
   const { totalTax, bracketBreakdown, marginalRate } = applyBrackets(taxableIncome, brackets);
 
   // 5. Dependent credits (CTC + ODC) with phase-out
-  const { childTaxCredit, otherDependentsCredit } = calculateDependentCredits(
+  const eligibleCredits = calculateDependentCredits(
     childTaxCreditEligible, otherDependentsEligible ?? 0, adjustedGrossIncome, filingStatus
   );
 
-  // Final federal tax (cannot be negative)
+  // Regular-tax planning excludes ACTC and never reports credits not applied.
+  const otherDependentsCredit = Math.min(totalTax, eligibleCredits.otherDependentsCredit);
+  const childTaxCredit = Math.min(totalTax - otherDependentsCredit, eligibleCredits.childTaxCredit);
   const totalFederalTax = Math.max(0, totalTax - childTaxCredit - otherDependentsCredit);
 
   // 6. Withholding gap

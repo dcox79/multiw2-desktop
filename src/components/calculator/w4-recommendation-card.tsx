@@ -17,7 +17,10 @@ export function W4RecommendationCard({ result }: W4RecommendationCardProps) {
           <CardTitle>W-4 Recommendations</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {result.adjustments.map((adj) => (
+          {result.recommendationStatus !== 'projected' && (
+            <p className="text-sm text-muted-foreground">A W-4 amount requires projected withholding and the actual number of remaining paychecks. Use the IRS withholding estimator for midyear changes.</p>
+          )}
+          {result.recommendationStatus === 'projected' && result.adjustments.map((adj) => (
             <div key={adj.jobId} className="border-b border-border pb-3 last:border-0 last:pb-0">
               <div className="flex justify-between items-baseline mb-1">
                 <span className="font-medium text-sm">{adj.jobName}</span>
@@ -33,12 +36,12 @@ export function W4RecommendationCard({ result }: W4RecommendationCardProps) {
             </div>
           ))}
 
-          <div className="border-t border-border pt-3 flex justify-between text-sm">
+          {result.recommendationStatus === 'projected' && <div className="border-t border-border pt-3 flex justify-between text-sm">
             <span className="text-muted-foreground">Remaining gap after adjustments</span>
             <span className="font-mono tabular-nums font-medium">
               {formatCurrency(result.remainingGapAfterAdjustment)}
             </span>
-          </div>
+          </div>}
         </CardContent>
       </Card>
     </>

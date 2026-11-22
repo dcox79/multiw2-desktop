@@ -16,7 +16,8 @@ test('local workflows, persistence, complete backup and fail-closed session', as
   const resultResponse = await request.post('/api/calculate', { data: { jobIds: [job.id], taxYear: 2026 } });
   expect(resultResponse.ok()).toBeTruthy();
   const result = await resultResponse.json();
-  expect(result.isApproximate).toBe(false);
+  expect(result.isApproximate).toBe(true);
+  expect(result.modelVersion).toBe(2);
   expect(result.federal.totalFederalTax).toBeGreaterThan(0);
   expect((await request.post('/api/calculate', { data: { jobIds: [job.id], taxYear: 2025 } })).status()).toBe(400);
   const savedResponse = await request.post('/api/saved-calculations', { data: { name: 'Offline result', input: result.input, result } });

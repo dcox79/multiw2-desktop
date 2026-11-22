@@ -59,7 +59,7 @@ export function ScenarioComparison({ scenario }: ScenarioComparisonProps) {
       <Card className={cn('border-l-4', taxImpact > 0 ? 'border-l-red-500' : taxImpact < 0 ? 'border-l-emerald-500' : 'border-l-violet-500')}>
         <CardContent className="py-4 px-5">
           <p className={cn('font-semibold', taxImpact > 0 ? 'text-destructive' : taxImpact < 0 ? 'text-success' : '')}>
-            This scenario would {taxImpact > 0 ? 'increase' : taxImpact < 0 ? 'decrease' : 'not change'} your {(deltas.selfEmploymentTax ?? 0) > 0 ? 'total tax' : 'federal tax'} by{' '}
+            The model estimates a {taxImpact > 0 ? 'rise' : taxImpact < 0 ? 'drop' : 'change'} in {(deltas.selfEmploymentTax ?? 0) !== 0 ? 'regular federal income and self-employment taxes' : 'regular federal income tax'} of{' '}
             <span className="font-mono tabular-nums">{formatCurrency(Math.abs(taxImpact))}</span>
           </p>
         </CardContent>

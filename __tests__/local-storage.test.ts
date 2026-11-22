@@ -35,7 +35,11 @@ test('local workflows round-trip all 11 tables, enforce corrections and years, r
     expect((await w2POST(request(w2Fields))).status).toBe(400);
     expect((await ok(w2POST(request({ ...w2Fields, correction_note: 'Corrected withholding', box2_federal_withheld: 15001.13 })))).version).toBe(3);
     const result = await ok(calculatePOST(request({ jobIds: [job.id, second.id], taxYear: 2026 }))) as CalculationResult;
-    expect(result.isApproximate).toBe(false);
+    expect(result.isApproximate).toBe(true);
+    expect(result.modelVersion).toBe(2);
+    expect(result.input.childTaxCreditEligible).toBe(0);
+    expect(result.input.otherDependentsEligible).toBe(0);
+    expect(assembleCalculation({ jobIds: [job.id], childTaxCreditEligible: 1, otherDependentsEligible: 1 }).input.childTaxCreditEligible).toBe(1);
     expect(result.input.estimatedPaymentsYTD).toBe(123.45);
     expect(result.metadata?.snapshotIds).toEqual([snapshot.id]);
     expect(result.metadata?.w2EntryIds).toEqual([w2.id]);

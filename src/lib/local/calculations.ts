@@ -8,7 +8,7 @@ import { runScenario } from '@/lib/tax/scenario-engine';
 import { TAX_YEAR, assertSupportedTaxYear } from '@/lib/tax/tax-data-2026';
 import { calculateFederalTax } from '@/lib/tax/federal-tax';
 import { optimizeBenefitsAllocation } from '@/lib/tax/benefits-optimizer';
-import { generateDocumentChecklist, analyzeFilingStrategy } from '@/lib/tax/tax-prep';
+import { generateDocumentChecklist } from '@/lib/tax/tax-prep';
 import type { CalculateRequest, CalculationInput, Job, YTDSnapshot, JobW2Entry, TaxProfile, Profile, EmployerBenefitPlan, TaxPrepDocument, ScenarioModification } from '@/lib/types';
 
 export function assembleCalculation(request: CalculateRequest) {
@@ -22,12 +22,9 @@ export function assembleCalculation(request: CalculateRequest) {
   const w2Entries = rows<JobW2Entry>(`SELECT * FROM job_w2_entries WHERE job_id IN (${placeholders}) AND tax_year = ? ORDER BY tax_year DESC, updated_at DESC, id`, ...ids, year);
   const tp = row<TaxProfile>('SELECT * FROM tax_profiles WHERE tax_year = ?', year);
   const settings = tp ?? profile<Profile>();
-  const dependents = rows<{ date_of_birth: string; relationship: string }>('SELECT * FROM dependents');
-  const childCredits = dependents.length ? dependents.filter(dependent => {
-    const age = year - Number(dependent.date_of_birth.slice(0, 4));
-    return age >= 0 && age < 17 && ['child','stepchild','foster_child','sibling'].includes(dependent.relationship);
-  }).length : request.childTaxCreditEligible ?? settings.child_tax_credit_eligible;
-  const dependentCount = request.dependents ?? (dependents.length || settings.dependents);
+  // Personal dependent records alone cannot establish Schedule 8812 eligibility.
+  const childCredits = request.childTaxCreditEligible ?? settings.child_tax_credit_eligible ?? 0;
+  const dependentCount = request.dependents ?? settings.dependents;
   const { jobInputs, calculationBasis } = buildJobInputs(jobs, snapshots, w2Entries, year);
   const input: CalculationInput = {
     taxYear: year, jobs: jobInputs, filingStatus: request.filingStatus ?? settings.filing_status ?? 'single',
@@ -35,7 +32,7 @@ export function assembleCalculation(request: CalculateRequest) {
     itemizedDeductions: request.itemizedDeductions ?? settings.itemized_deduction_amount,
     estimatedPaymentsYTD: request.estimatedPaymentsYTD ?? (tp ? tp.estimated_payment_q1 + tp.estimated_payment_q2 + tp.estimated_payment_q3 + tp.estimated_payment_q4 : 0),
     dependents: dependentCount, childTaxCreditEligible: childCredits,
-    otherDependentsEligible: request.otherDependentsEligible ?? Math.max(0, dependentCount - childCredits),
+    otherDependentsEligible: request.otherDependentsEligible ?? 0,
   };
   const w2Jobs = new Set(w2Entries.map(entry => entry.job_id));
   const seen = new Set<string>();
@@ -50,7 +47,7 @@ export function assembleCalculation(request: CalculateRequest) {
 
 export const calculatePOST = (request: Request) => api(async () => {
   const { input, metadata } = assembleCalculation(calculateRequestSchema.parse(await request.json()));
-  return { ...runAllCalculators(input), isApproximate: false, metadata };
+  return { ...runAllCalculators(input), metadata };
 });
 
 const modificationTypes = ['quit_job','add_job','salary_change','filing_status_change','add_1099','custom','saved_calculation'] as const;
@@ -103,13 +100,7 @@ export const taxPrepGET = (request: Request) => api(() => {
       return camelRow(insert('tax_prep_documents', snakeFields(data))) as unknown as TaxPrepDocument;
     });
   });
-  let filingStrategy = null;
-  // Historical records stay available, while tax calculations require reviewed tables.
-  if (year === TAX_YEAR && w2.length) {
-    const { input } = assembleCalculation({ jobIds: [...new Set(w2.map(entry => entry.job_id))], taxYear: year });
-    filingStrategy = analyzeFilingStrategy(input.jobs, input.filingStatus, input.dependents, input.childTaxCreditEligible);
-  }
-  return { taxYear: year, documents, safeHarborStatus: null, filingStrategy, estimatedRefund: null, priorYearTaxAmount: null,
-    calculationNotice: year !== TAX_YEAR ? `Tax calculations are available for ${TAX_YEAR} only. Historical documents remain editable.` : 'Prior-year safe harbor requires actual prior-return tax and AGI; W-2 income alone does not establish it.' };
+  return { taxYear: year, documents, safeHarborStatus: null, filingStrategy: null, estimatedRefund: null, priorYearTaxAmount: null,
+    calculationNotice: year !== TAX_YEAR ? `Tax calculations are available for ${TAX_YEAR} only. Historical documents remain editable.` : 'Prior-year safe harbor requires actual prior-return tax and AGI; W-2 income alone does not establish it. Joint-versus-separate estimates require separate information for each spouse.' };
 });
 export const safeHarborGET = () => api(() => { throw new ApiError('Prior-year safe harbor is unavailable without actual prior-return total tax and AGI. W-2 income alone does not establish the threshold.', 409); });

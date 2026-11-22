@@ -29,6 +29,7 @@ import { useTaxProfile } from '@/hooks/use-tax-profile';
 import { useSavedCalculations } from '@/hooks/use-saved-calculations';
 import { TAX_YEAR } from '@/lib/tax/tax-data-2026';
 import { computeProjections } from '@/lib/tax/projections';
+import { CURRENT_TAX_MODEL_VERSION } from '@/lib/tax/run-calculators';
 import { calculateFederalTax } from '@/lib/tax/federal-tax';
 import { calculateSSOverpayment } from '@/lib/tax/social-security';
 import { calculateMedicareTax } from '@/lib/tax/medicare-tax';
@@ -60,7 +61,7 @@ export function JobDetailContent({ jobId }: JobDetailContentProps) {
   const { isLoading: subLoading, profile } = useProfile();
   const { profile: taxProfile2026 } = useTaxProfile(2026);
   const { calculations: savedCalcs, isLoading: calcsLoading } = useSavedCalculations();
-  const { data: latestSnapMap, isLoading: latestSnapsLoading } = useLatestSnapshots();
+  const { data: latestSnapMap, isLoading: latestSnapsLoading } = useLatestSnapshots(2026);
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [snapshotFormOpen, setSnapshotFormOpen] = useState(false);
@@ -76,7 +77,7 @@ export function JobDetailContent({ jobId }: JobDetailContentProps) {
   // Find the latest combined calculation that includes this job
   const combinedResult: CalculationResult | null = useMemo(() => {
     const calc = savedCalcs.find(
-      (c) => c.source === 'calculator' && c.resultData && c.jobIds.includes(jobId)
+      (c) => c.source === 'calculator' && c.resultData?.modelVersion === CURRENT_TAX_MODEL_VERSION && c.jobIds.includes(jobId)
     );
     return calc?.resultData ?? null;
   }, [savedCalcs, jobId]);
@@ -120,7 +121,7 @@ export function JobDetailContent({ jobId }: JobDetailContentProps) {
       estimatedPaymentsYTD: estimatedPaymentsYTD2026,
       dependents: taxProfile2026?.dependents ?? profile?.dependents ?? 0,
       childTaxCreditEligible: taxProfile2026?.child_tax_credit_eligible ?? profile?.child_tax_credit_eligible ?? 0,
-      otherDependentsEligible: Math.max(0, (taxProfile2026?.dependents ?? profile?.dependents ?? 0) - (taxProfile2026?.child_tax_credit_eligible ?? profile?.child_tax_credit_eligible ?? 0)),
+      otherDependentsEligible: 0,
     };
     const federal = calculateFederalTax(calcInput);
     const socialSecurity = calculateSSOverpayment(calcInput);
@@ -136,16 +137,19 @@ export function JobDetailContent({ jobId }: JobDetailContentProps) {
     if (!latestSnapMap || latestSnapMap.size === 0 || !job) return null;
     // Only compute if this job has a snapshot
     if (!latestSnapMap.has(jobId)) return null;
-    const activeJobs = jobs.filter(j => j.employment_status === 'active');
+    const relevantJobs = jobs.filter(j => j.employment_status !== 'deleted' && !j.is_draft);
     return computeProjections(
-      activeJobs,
+      relevantJobs,
       latestSnapMap,
-      profile?.filing_status ?? 'single',
-      profile?.dependents ?? 0,
-      profile?.use_standard_deduction ?? true,
+      taxProfile2026?.filing_status ?? profile?.filing_status ?? 'single',
+      taxProfile2026?.dependents ?? profile?.dependents ?? 0,
+      taxProfile2026?.use_standard_deduction ?? profile?.use_standard_deduction ?? true,
       estimatedPaymentsYTD2026,
+      taxProfile2026?.itemized_deduction_amount ?? 0,
+      TAX_YEAR,
+      taxProfile2026?.child_tax_credit_eligible ?? profile?.child_tax_credit_eligible ?? 0,
     );
-  }, [latestSnapMap, jobs, job, jobId, profile, estimatedPaymentsYTD2026]);
+  }, [latestSnapMap, jobs, job, jobId, profile, taxProfile2026, estimatedPaymentsYTD2026]);
 
   // This job's projection within the combined result
   const thisJobProjection = useMemo(() => {

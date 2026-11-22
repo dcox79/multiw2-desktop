@@ -22,7 +22,7 @@ const SCENARIO_TYPES: Array<{
   { type: 'quit_job', icon: UserMinus, title: 'Quit Job', description: 'See the impact of leaving an employer' },
   { type: 'add_job', icon: UserPlus, title: 'Add Job', description: 'Model adding a new W2 position' },
   { type: 'salary_change', icon: TrendingUp, title: 'Salary Change', description: 'Raise, bonus, or pay cut' },
-  { type: 'filing_status_change', icon: Users, title: 'Filing Status', description: 'MFJ vs Single comparison' },
+  { type: 'filing_status_change', icon: Users, title: 'Filing Status', description: 'Illustrate bracket changes; not a filing recommendation' },
   { type: 'add_1099', icon: FileText, title: '1099 Income', description: 'Add freelance or side income' },
 ];
 
@@ -245,7 +245,7 @@ export function ScenarioBuilder({ open, onOpenChange, jobs, onSubmit, isSubmitti
           {selectedType === 'add_1099' && (
             <>
               <div className="space-y-1.5">
-                <Label>Gross 1099 income</Label>
+                <Label>Annual net self-employment profit (after business expenses)</Label>
                 <Input type="number" value={newSalary} onChange={(e) => setNewSalary(e.target.value)} placeholder="25000" />
               </div>
               <div className="space-y-1.5">

@@ -33,7 +33,7 @@ function makeJob(salary: number, overrides = {}) {
 
 describe('calculateQuarterlyEstimates', () => {
   describe('all quarters remaining', () => {
-    it('distributes gap evenly across 4 quarters', () => {
+    it('shows all four general dates without inventing installment amounts', () => {
       const input = makeInput({
         jobs: [makeJob(200000, { federalWithholdingYTD: 0 })],
       });
@@ -52,7 +52,7 @@ describe('calculateQuarterlyEstimates', () => {
   });
 
   describe('some quarters past', () => {
-    it('distributes remaining gap across Q3 and Q4 when Q1 and Q2 are past', () => {
+    it('labels passed dates without allocating the balance across upcoming dates', () => {
       const input = makeInput({
         jobs: [makeJob(200000, { federalWithholdingYTD: 0 })],
       });
@@ -73,12 +73,12 @@ describe('calculateQuarterlyEstimates', () => {
       }
 
       // Future quarters should split the remaining
-      expect(futureQuarters[0].amount).toBeGreaterThan(0);
+      expect(futureQuarters[0].amount).toBe(0);
     });
   });
 
   describe('estimated payments already made', () => {
-    it('reduces recommended amounts by payments already made', () => {
+    it('does not use undated totals to invent installment amounts', () => {
       const input = makeInput({
         jobs: [makeJob(200000, { federalWithholdingYTD: 0 })],
         estimatedPaymentsYTD: 10000,
@@ -95,12 +95,13 @@ describe('calculateQuarterlyEstimates', () => {
       // With $10K already paid, per-quarter amounts should be lower
       const totalWithPayments = resultWithPayments.quarterlyPayments.reduce((s, q) => s + q.amount, 0);
       const totalWithout = resultWithout.quarterlyPayments.reduce((s, q) => s + q.amount, 0);
-      expect(totalWithPayments).toBeLessThan(totalWithout);
+      expect(totalWithPayments).toBe(0);
+      expect(totalWithout).toBe(0);
     });
   });
 
   describe('penalty risk', () => {
-    it('triggers penalty risk when gap > $1,000 and estimates insufficient', () => {
+    it('does not give a penalty verdict even if the annual modeling gap is high', () => {
       const input = makeInput({
         jobs: [makeJob(200000, { federalWithholdingYTD: 0 })],
         estimatedPaymentsYTD: 0,
@@ -108,12 +109,12 @@ describe('calculateQuarterlyEstimates', () => {
       const federalResult = calculateFederalTax(input);
       const result = calculateQuarterlyEstimates(input, federalResult, new Date('2026-01-01'));
 
-      expect(result.penaltyRisk).toBe(true);
-      expect(result.penaltyExplanation).toContain('underpayment penalties');
-      expect(result.penaltyExplanation).toContain('Prior-year safe harbor is unknown');
+      expect(result.penaltyRisk).toBeNull();
+      expect(result.penaltyExplanation).toContain('Form 2210');
+      expect(result.penaltyExplanation).toContain('actual prior return');
     });
 
-    it('no penalty risk when gap <= $1,000', () => {
+    it('keeps the annual benchmark at zero under $1,000 without making a penalty determination', () => {
       const input = makeInput({
         // Low salary where withholding gap would be small
         jobs: [makeJob(20000, { federalWithholdingYTD: 0 })],
@@ -122,8 +123,9 @@ describe('calculateQuarterlyEstimates', () => {
       const result = calculateQuarterlyEstimates(input, federalResult, new Date('2026-01-01'));
 
       // Tax on $20K with standard deduction is likely ~$430, which is under $1,000
-      expect(result.penaltyRisk).toBe(false);
-      expect(result.penaltyExplanation).toContain('safe harbor');
+      expect(result.penaltyRisk).toBeNull();
+      expect(result.requiredAnnualEstimate).toBe(0);
+      expect(result.penaltyExplanation).toContain('safe-harbor');
     });
   });
 
