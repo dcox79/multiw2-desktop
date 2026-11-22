@@ -1,13 +1,7 @@
-import { calculateFederalTax } from './federal-tax';
-import { STANDARD_DEDUCTION } from './tax-data-2026';
-import { formatCurrency } from '../utils';
 import type {
-  CalculationInput,
-  JobInput,
   Job,
   JobW2Entry,
   TaxPrepDocument,
-  FilingStrategyRecommendation,
 } from '../types';
 
 // Document categories for grouping
@@ -121,51 +115,4 @@ export function getDocumentCategory(docType: string): DocumentCategory {
   if (['1099_int', '1099_div'].includes(docType)) return 'income';
   if (['1098', 'charitable', 'property_tax', '1098_e', 'medical'].includes(docType)) return 'deductions';
   return 'reference';
-}
-
-/**
- * Compares MFJ vs MFS filing for married filers.
- * Returns null for single/HoH filers.
- */
-export function analyzeFilingStrategy(
-  jobInputs: JobInput[],
-  filingStatus: string,
-  dependents: number,
-  childTaxCreditEligible: number,
-): FilingStrategyRecommendation | null {
-  if (filingStatus !== 'married_filing_jointly' && filingStatus !== 'married_filing_separately') {
-    return null;
-  }
-
-  const mfjInput: CalculationInput = {
-    jobs: jobInputs,
-    filingStatus: 'married_filing_jointly',
-    standardDeduction: true,
-    estimatedPaymentsYTD: 0,
-    dependents,
-    childTaxCreditEligible,
-    otherDependentsEligible: 0,
-  };
-  const mfjResult = calculateFederalTax(mfjInput);
-
-  const mfsInput: CalculationInput = {
-    ...mfjInput,
-    filingStatus: 'married_filing_separately',
-  };
-  const mfsResult = calculateFederalTax(mfsInput);
-
-  const savings = Math.abs(mfjResult.totalFederalTax - mfsResult.totalFederalTax);
-  const recommended = mfjResult.totalFederalTax <= mfsResult.totalFederalTax ? 'mfj' : 'mfs';
-
-  return {
-    recommendedStatus: recommended as 'mfj' | 'mfs',
-    taxUnderMFJ: mfjResult.totalFederalTax,
-    taxUnderMFS: mfsResult.totalFederalTax,
-    savingsAmount: savings,
-    summary: `Illustrative comparison: ${recommended === 'mfj' ? 'joint' : 'separate'} brackets produce ${formatCurrency(savings)} less income tax on the entered income. Spouse income allocation, community-property rules and filing restrictions are not modeled; this is not a filing-status recommendation.`,
-    mfjEffectiveRate: mfjResult.effectiveRate,
-    mfsEffectiveRate: mfsResult.effectiveRate,
-    mfjDeduction: STANDARD_DEDUCTION['married_filing_jointly'],
-    mfsDeduction: STANDARD_DEDUCTION['married_filing_separately'],
-  };
 }

@@ -88,7 +88,8 @@ export function TrackerContent() {
   const latestByJob = useMemo(() => {
     const map = new Map<string, YTDSnapshot>();
     for (const [jobId, list] of snapshotsByJob) {
-      if (list.length > 0) map.set(jobId, list[0]);
+      const selected = list.find(snap => snap.paycheck_date.startsWith('2026-'));
+      if (selected) map.set(jobId, selected);
     }
     return map;
   }, [snapshotsByJob]);
@@ -103,6 +104,8 @@ export function TrackerContent() {
       taxProfile?.use_standard_deduction ?? true,
       estimatedPaymentsYTD,
       taxProfile?.use_standard_deduction ? 0 : itemizedAmount,
+      undefined,
+      taxProfile?.child_tax_credit_eligible ?? 0,
     );
   }, [jobs, latestByJob, taxProfile, estimatedPaymentsYTD, itemizedAmount]);
 

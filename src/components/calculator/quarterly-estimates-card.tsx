@@ -29,14 +29,14 @@ export function QuarterlyEstimatesCard({ result }: QuarterlyEstimatesCardProps) 
               <p className="font-mono tabular-nums">{formatCurrency(result.safeHarborAmount)}</p>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground">Required annual estimate</span>
+              <span className="text-xs text-muted-foreground">Modeled gap after entered withholding, before estimated payments</span>
               <p className="font-mono tabular-nums">{formatCurrency(result.requiredAnnualEstimate)}</p>
             </div>
           </div>
 
           {/* Payment schedule */}
           <div className="border-t border-border pt-3">
-            <h4 className="text-xs font-medium mb-2 text-muted-foreground">Payment schedule</h4>
+            <h4 className="text-xs font-medium mb-2 text-muted-foreground">General due dates (no installment calculation)</h4>
             <div className="space-y-2">
               {result.quarterlyPayments.map((q) => (
                 <div key={q.quarter} className="flex items-center justify-between text-sm">
@@ -48,7 +48,7 @@ export function QuarterlyEstimatesCard({ result }: QuarterlyEstimatesCardProps) 
                     )}
                   </div>
                   <span className="font-mono tabular-nums font-medium">
-                    {formatCurrency(q.amount)}
+                    Not determined
                   </span>
                 </div>
               ))}

@@ -196,7 +196,7 @@ function W4Section({ w4 }: { w4: W4Result }) {
           </tr>
         </thead>
         <tbody>
-          {w4.adjustments.map((adj) => (
+          {w4.recommendationStatus === 'projected' && w4.adjustments.map((adj) => (
             <tr key={adj.jobId} className="border-b border-border/50">
               <td className="py-1.5">{adj.jobName}</td>
               <td className="text-right font-mono tabular-nums">{formatCurrency(adj.currentWithholdingPerPaycheck)}</td>
@@ -246,7 +246,7 @@ function QuarterlySection({ quarterly }: { quarterly: QuarterlyEstimateResult })
               <tr key={q.quarter} className="border-b border-border/50">
                 <td className="py-1.5">Q{q.quarter}</td>
                 <td className="py-1.5">{q.dueDate}</td>
-                <td className="text-right font-mono tabular-nums">{formatCurrency(q.amount)}</td>
+                <td className="text-right font-mono tabular-nums">Not determined</td>
                 <td className="text-right">
                   {q.paidAmount > 0 ? (
                     <span className="text-success text-xs">Paid {formatCurrency(q.paidAmount)}</span>
@@ -348,6 +348,7 @@ export function ShareView({ calculation }: ShareViewProps) {
             <p className="text-sm text-muted-foreground mt-1">
               Calculated on {createdDate}
             </p>
+            {!result.modelVersion && <p className="text-sm text-muted-foreground">Historical estimate. Recalculate using the current model before relying on it.</p>}
             {result.isApproximate && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                 Values shown are approximate estimates (±15%)

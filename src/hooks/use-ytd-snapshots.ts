@@ -100,10 +100,10 @@ export function useYTDSnapshots(jobId?: string) {
   };
 }
 
-export function useLatestSnapshots() {
+export function useLatestSnapshots(taxYear?: number) {
 
   return useQuery({
-    queryKey: ['ytd-snapshots', 'latest'],
+    queryKey: ['ytd-snapshots', 'latest', taxYear],
     queryFn: async () => {
       const response = await fetch('/api/ytd-snapshots');
       if (!response.ok) throw new Error('Failed to load ytd-snapshots');
@@ -111,7 +111,9 @@ export function useLatestSnapshots() {
 
       const latestByJob = new Map<string, YTDSnapshot>();
       for (const snapshot of (data ?? []) as YTDSnapshot[]) {
-        if (!latestByJob.has(snapshot.job_id)) {
+        if (taxYear != null && !snapshot.paycheck_date.startsWith(taxYear + '-')) continue;
+        const previous = latestByJob.get(snapshot.job_id);
+        if (!previous || snapshot.paycheck_date > previous.paycheck_date) {
           latestByJob.set(snapshot.job_id, snapshot);
         }
       }

@@ -15,7 +15,7 @@ export function getTotal401kDeferrals(job: JobInput): number {
   return getTraditional401k(job) + getRoth401k(job);
 }
 
-/** HSA contributions (employer + employee combined). Reduces AGI. W2: Box 12 Code W. */
+/** HSA contributions (employer + employee combined), for contribution tracking. W2: Box 12 Code W. */
 export function getHSAContributions(job: JobInput): number {
   return job.hsaContributions ?? 0;
 }
@@ -43,7 +43,7 @@ export function getStockOptionIncome(job: JobInput): number {
  *   Do NOT subtract them again. Above-the-line deductions from salary = 0.
  *
  * - Pay stub (Gross): Pre-tax 401k and HSA have NOT been subtracted yet.
- *   Subtract traditional 401k (Code D) and HSA (Code W) to get AGI.
+ *   Subtract traditional 401(k) and separately identified employee pretax HSA.
  *
  * Roth 401k (Code AA) is NEVER subtracted — it's after-tax regardless of source.
  */
@@ -51,13 +51,13 @@ export function getAboveTheLineDeductions(job: JobInput): number {
   if (job.incomeSource === 'w2') {
     return 0;
   }
-  return getTraditional401k(job) + getHSAContributions(job);
+  return getTraditional401k(job) + (job.employeePretaxHsa ?? 0);
 }
 
 /** Box 3/5 when supplied; legacy W-2 approximates by restoring pre-tax 401(k).
- * Paystub HSA is assumed to be a payroll cafeteria-plan contribution.
+ * Only confirmed employee pretax HSA is subtracted from paystub gross.
  */
 export function getPayrollWages(job: JobInput, kind: 'socialSecurity' | 'medicare'): number {
   return job[kind === 'socialSecurity' ? 'socialSecurityWages' : 'medicareWages']
-    ?? Math.max(0, job.annualSalary + (job.incomeSource === 'w2' ? getTraditional401k(job) : -getHSAContributions(job)));
+    ?? Math.max(0, job.annualSalary + (job.incomeSource === 'w2' ? getTraditional401k(job) : -(job.employeePretaxHsa ?? 0)));
 }

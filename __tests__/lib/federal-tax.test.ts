@@ -131,6 +131,7 @@ describe('calculateFederalTax', () => {
           incomeSource: 'paystub',
           traditional401k: 15000,
           hsaContributions: 3000,
+          employeePretaxHsa: 3000,
         })],
       }));
 
@@ -437,6 +438,7 @@ describe('calculateFederalTax', () => {
             medicareWithholdingYTD: 2000,
             traditional401k: 15000,
             hsaContributions: 3000,
+            employeePretaxHsa: 3000,
             payFrequency: 'semimonthly',
           }),
           makeJob(145000, {
@@ -459,5 +461,22 @@ describe('calculateFederalTax', () => {
       expect(result.totalWithheld).toBe(45000);
       expect(result.withholdingGap).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('2026 audit regressions', () => {
+  it('matches $13,170 of regular tax for two jobs with $60,000 + $40,000 Box 1', () => {
+    const result = calculateFederalTax(makeInput({ taxYear: 2026, jobs: [makeJob(60000), makeJob(40000)] }));
+    expect(result.totalFederalTax).toBeCloseTo(13170, 2);
+  });
+  it('does not deduct employer HSA from gross or payroll', () => {
+    const result = calculateFederalTax(makeInput({ jobs: [makeJob(120000, { incomeSource: 'paystub', hsaContributions: 3000 })] }));
+    expect(result.adjustedGrossIncome).toEqual(120000);
+    expect(result.totalFederalTax).toBeCloseTo(17570, 2);
+  });
+  it('limits applied nonrefundable dependent credits to the modeled tax', () => {
+    const result = calculateFederalTax(makeInput({ jobs: [makeJob(20000)], childTaxCreditEligible: 1, otherDependentsEligible: 1 }));
+    expect(result.totalFederalTax).toBe(0);
+    expect(result.childTaxCredit + result.otherDependentsCredit).toBeCloseTo(390, 2);
   });
 });

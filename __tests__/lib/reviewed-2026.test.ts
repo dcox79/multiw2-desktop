@@ -70,7 +70,7 @@ describe('2026 source-reviewed regressions (IRS Rev. Proc. 2025-32)', () => {
     expect(quarterly.safeHarborAmount).toBe(900);
     expect(quarterly.requiredAnnualEstimate).toBe(900);
     expect(quarterly.quarterlyPayments[0].isPast).toBe(false);
-    expect(quarterly.penaltyExplanation).toContain('Prior-year safe harbor is unknown');
+    expect(quarterly.penaltyExplanation).toContain('actual prior return');
     const below = runAllCalculators(input([job(9990)], { standardDeduction: false }));
     expect(below.quarterly.requiredAnnualEstimate).toBe(0);
   });
@@ -102,5 +102,40 @@ describe('2026 source-reviewed regressions (IRS Rev. Proc. 2025-32)', () => {
       { ...plans[1], matchPercent: 100, matchCapPercent: 10 },
     ], { a: 100000, b: 100000 });
     expect(competing.totalEmployerMatch).toBe(17250);
+  });
+});
+
+describe('year-end wage projections', () => {
+  const income = { id: 'job', name: 'Example employer', annual_salary: 100000, pay_frequency: 'biweekly', start_month: 1, employment_status: 'active' } as Job;
+  const baseline = { job_id: 'job', paycheck_date: '2026-06-30', ytd_gross: 50000, ytd_federal_withheld: 6500, ytd_ss_withheld: 3100, ytd_medicare_withheld: 725 } as YTDSnapshot;
+  const estimate = (jobs: Job[], snap: YTDSnapshot) => computeProjections(jobs, new Map([['job', snap]]), 'single', 0, true)!;
+
+  it('does not add the same current W-4 amount again', () => {
+    const without = estimate([income], baseline);
+    const withExisting = estimate([{ ...income, extra_withholding_per_paycheck: 150 }], baseline);
+    expect(withExisting.jobProjections[0].projectedFedWithheld).toBe(without.jobProjections[0].projectedFedWithheld);
+    expect(withExisting.w4.recommendationStatus).toBe('insufficient_data');
+  });
+  it('never caps estimated income or withholding below amounts already reported', () => {
+    const result = estimate([income], { ...baseline, paycheck_date: '2026-04-01', ytd_gross: 110000, ytd_federal_withheld: 14000, ytd_traditional_401k: 10000 });
+    const job = result.jobProjections[0];
+    expect(job.projectedGross).toBeGreaterThanOrEqual(110000);
+    expect(job.projectedFedWithheld).toBeGreaterThanOrEqual(14000);
+    expect(result.federal.adjustedGrossIncome).toBe(100000);
+    expect(result.hasWarnings).toBe(true);
+  });
+  it('does not annualize a former job', () => {
+    const result = estimate([{ ...income, employment_status: 'former' }], baseline);
+    expect(result.jobProjections[0].projectedGross).toBe(50000);
+    expect(result.jobProjections[0].projectedFedWithheld).toBe(6500);
+  });
+  it('warns when a job lacks a matching-period snapshot', () => {
+    const result = estimate([income, { ...income, id: 'missing' }], baseline);
+    expect(result.hasWarnings).toBe(true);
+  });
+  it('applies the confirmed child count in a year-end projection', () => {
+    const base = estimate([income], baseline);
+    const child = computeProjections([income], new Map([['job', baseline]]), 'single', 1, true, 0, 0, 2026, 1)!;
+    expect(base.federal.totalFederalTax - child.federal.totalFederalTax).toBeCloseTo(2200, 2);
   });
 });

@@ -17,12 +17,16 @@ export interface JobInput {
   traditional401k?: number;
   roth401k?: number;
   hsaContributions?: number;
+  /** Employee salary reduction only; never use the combined employer/employee Box 12 W total here. */
+  employeePretaxHsa?: number;
   groupTermLife?: number;
   employerHealthCoverage?: number;
   stockOptionIncome?: number;
   payFrequency: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
   startMonth: number;
   extraWithholdingPerPaycheck?: number;
+  projectedFederalWithholding?: number;
+  remainingPaychecks?: number;
 }
 
 export interface CalculationInput {
@@ -242,6 +246,7 @@ export interface W4Adjustment {
 }
 
 export interface W4Result {
+  recommendationStatus?: 'projected' | 'insufficient_data';
   adjustments: W4Adjustment[];
   totalCurrentAnnualWithholding: number;
   totalRevisedAnnualWithholding: number;
@@ -304,11 +309,12 @@ export interface QuarterlyEstimateResult {
   safeHarborAmount: number;
   requiredAnnualEstimate: number;
   quarterlyPayments: QuarterlyEstimate[];
-  penaltyRisk: boolean;
+  penaltyRisk: boolean | null;
   penaltyExplanation: string;
 }
 
 export interface CalculationResult {
+  modelVersion?: number; // Absent on historical calculations.
   id?: string;
   timestamp: string;
   input: CalculationInput;

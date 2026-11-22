@@ -70,3 +70,18 @@ The reviewed tables remove the known unverified-value blocker. These explicit sc
 API review found that selecting December as a quit month removed the job's entire annual income. December now leaves the input unchanged, retaining full annual income, withholding and contributions including cents. Omitting the month deliberately models removing the job for the full year, and the selector's empty label must state that behavior.
 
 The revised December regression failed before the initial engine correction: before-fix evidence. The independent API reviewer then caught rounding of fractional amounts in that initial correction. A stronger exact-input-preservation regression failed before the cents fix. After the final unchanged-input branch, all **9 scenario tests passed** and focused ESLint passed: final after-fix evidence. A separate regression retains the omitted-month full-year-removal contract. The original incorrect December expectation and intermediate results remain recorded in the baseline artifacts above.
+
+
+## November 2026 follow-up
+
+The 2026 ordinary-income rate schedules and basic deductions were already correct in the desktop app. The earlier website figures did not apply to this source. The regression suite retains all 24 bracket boundaries and checks that two W-2s totaling $100,000 produce $13,170 using the basic single deduction and the rate schedules. This is regular income-tax planning, not the Form 1040 tax-table amount for filing. 2026 remains the only calculation year; historical documents are retained.
+
+The follow-up limits or corrects these modeled outputs:
+
+- Combined employer and employee HSA amounts still count for contribution tracking, but are not deducted from gross or payroll wages without a separate employee pretax amount. Existing imported totals are not reinterpreted as employee contributions.
+- Dependent records do not establish Schedule 8812 eligibility. Only confirmed CTC/ODC counts enter the regular-tax model, applied nonrefundable credits cannot exceed modeled regular tax, and refundable credits are not calculated.
+- Year-end snapshot projections use the latest matching-year record. They avoid adding an existing W-4 amount a second time, never cap wages or withholding below entered amounts, and do not annualize former jobs. The projection warns when a job has no matching snapshot or the HSA split is unknown.
+- A W-4 suggestion needs an explicit forecast and remaining checks; an annualized pay-frequency count or a final W-2 is not enough. Entered estimated payments reduce the modeled gap. The current UI does not collect exact remaining checks; use the IRS estimator rather than treating a historical or projected number as an instruction.
+- General quarterly dates and the 90% regular-income planning benchmark remain. The app does not allocate a gap across installments or determine penalties without the prior return and payment dates. A spouse-by-spouse filing recommendation does not appear without separate spouse inputs.
+
+Sources: [2026 IRS rate schedules](https://www.irs.gov/irb/2025-45_IRB#REV-PROC-2025-32), [IRS Pub. 969](https://www.irs.gov/publications/p969), [Schedule 8812 instructions](https://www.irs.gov/instructions/i1040s8), [IRS Form W-4](https://www.irs.gov/pub/irs-pdf/fw4.pdf), [Form 2210 instructions](https://www.irs.gov/instructions/i2210).

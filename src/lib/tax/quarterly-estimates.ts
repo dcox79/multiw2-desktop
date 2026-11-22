@@ -16,7 +16,6 @@ export function calculateQuarterlyEstimates(
   const safeHarborAmount = totalAnnualTax * 0.9;
   const gap = totalAnnualTax - totalWithholdingProjected;
   const requiredAnnualEstimate = gap < 1000 ? 0 : Math.max(0, safeHarborAmount - totalWithholdingProjected);
-  const remaining = Math.max(0, requiredAnnualEstimate - input.estimatedPaymentsYTD);
   const quarterlyPayments = QUARTERLY_DUE_DATES.map(q => ({
     quarter: q.quarter,
     dueDate: q.dueDate,
@@ -25,14 +24,7 @@ export function calculateQuarterlyEstimates(
     isPast: currentDate > new Date(`${q.isoDate}T23:59:59.999`),
     paidAmount: 0,
   }));
-  const future = quarterlyPayments.filter(q => !q.isPast);
-  for (const q of future) q.amount = Math.ceil(remaining / future.length * 100) / 100;
-  const penaltyRisk = remaining > 0;
-  const penaltyExplanation = (gap < 1000
-    ? 'The estimated income-tax balance after withholding is below the $1,000 payment threshold. '
-    : penaltyRisk
-      ? 'Payments fall below 90% of estimated current-year income tax; underpayment penalties may apply. '
-      : 'Payments cover 90% of estimated current-year income tax. ')
-    + 'Prior-year safe harbor is unknown without the actual prior return. Payment timing, refundable credits, additional taxes and exceptions are not assessed; later payments do not erase earlier underpayments.';
+  const penaltyRisk = null;
+  const penaltyExplanation = 'This annual planning benchmark is not a safe-harbor or installment determination. Use your actual prior return, payment dates, and Form 2210 rules. A later payment does not by itself erase a prior underpayment.';
   return { totalAnnualTax, totalWithholdingProjected, safeHarborAmount, requiredAnnualEstimate, quarterlyPayments, penaltyRisk, penaltyExplanation };
 }

@@ -10,6 +10,8 @@ import type { CalculationInput, CalculationResult } from '../types';
  * Run all 6 tax calculators and return a complete CalculationResult.
  * Shared across calculate route, projections, and scenario engine.
  */
+export const CURRENT_TAX_MODEL_VERSION = 2;
+
 export function runAllCalculators(input: CalculationInput): CalculationResult {
   const federal = calculateFederalTax(input);
   const socialSecurity = calculateSSOverpayment(input);
@@ -19,6 +21,7 @@ export function runAllCalculators(input: CalculationInput): CalculationResult {
   const quarterly = calculateQuarterlyEstimates(input, federal);
 
   return {
+    modelVersion: CURRENT_TAX_MODEL_VERSION,
     timestamp: new Date().toISOString(),
     input,
     federal,
@@ -27,6 +30,6 @@ export function runAllCalculators(input: CalculationInput): CalculationResult {
     w4,
     retirement,
     quarterly,
-    isApproximate: false,
+    isApproximate: true,
   };
 }

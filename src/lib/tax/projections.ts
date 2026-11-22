@@ -37,6 +37,7 @@ export function computeProjections(
   estimatedPaymentsYTD: number = 0,
   itemizedDeductions: number = 0,
   taxYear: number = TAX_YEAR,
+  childTaxCreditEligible = 0,
 ): ProjectionResult | null {
   assertSupportedTaxYear(taxYear);
   const jobsWithSnaps = jobs.filter((j) => latestByJob.get(j.id)?.paycheck_date.startsWith(`${taxYear}-`));
@@ -45,46 +46,45 @@ export function computeProjections(
   const jobProjections: JobProjection[] = [];
   const jobInputs: JobInput[] = [];
   let latestDate = '';
-  let hasWarnings = false;
+  let hasWarnings = jobsWithSnaps.length < jobs.length;
+
+  const scaleFuture = (actual: number, projection: number, scale: number) => actual + Math.round((projection - actual) * scale * 100) / 100;
 
   for (const job of jobsWithSnaps) {
     const snap = latestByJob.get(job.id)!;
 
-    const snapDate = new Date(snap.paycheck_date + 'T00:00:00');
-    const snapYear = snapDate.getFullYear();
-    const yearStart = new Date(snapYear, 0, 1);
-    const yearEnd = new Date(snapYear, 11, 31);
-    const totalDays = (yearEnd.getTime() - yearStart.getTime()) / 86_400_000;
-    const elapsedDays = (snapDate.getTime() - yearStart.getTime()) / 86_400_000;
-    const fraction = Math.max(0.05, Math.min(1, elapsedDays / totalDays));
+    const snapDate = Date.parse(snap.paycheck_date + 'T00:00:00Z');
+    const yearStart = Date.UTC(taxYear, job.started_this_year ? (job.start_month ?? 1) - 1 : 0, 1);
+    const yearEnd = Date.UTC(taxYear + 1, 0, 1);
+    const totalDays = (yearEnd - yearStart) / 86_400_000;
+    const elapsedDays = Math.max(0, (snapDate - yearStart) / 86_400_000 + 1);
+    const former = job.employment_status === 'former';
+    const fraction = former ? 1 : Math.max(0.05, Math.min(1, elapsedDays / totalDays));
+    const insufficientData = !former && elapsedDays < 18;
 
-    const insufficientData = elapsedDays < 18;
+    const extrapolate = (value: number) => fraction === 1 ? value : Math.max(value, Math.round(value / fraction));
+    let projectedGross = extrapolate(Number(snap.ytd_gross));
+    let projectedFedWithheld = extrapolate(Number(snap.ytd_federal_withheld));
+    let projectedSSWithheld = extrapolate(Number(snap.ytd_ss_withheld));
+    let projectedMedWithheld = extrapolate(Number(snap.ytd_medicare_withheld));
 
-    let projectedGross = Math.round(Number(snap.ytd_gross) / fraction);
-    let projectedFedWithheld = Math.round(Number(snap.ytd_federal_withheld) / fraction);
-    let projectedSSWithheld = Math.round(Number(snap.ytd_ss_withheld) / fraction);
-    let projectedMedWithheld = Math.round(Number(snap.ytd_medicare_withheld) / fraction);
-
-    // Project extra W-4 withholding for remaining portion of year
-    const extraWH = Number(job.extra_withholding_per_paycheck ?? 0);
-    if (extraWH > 0) {
-      const periodsPerYear = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12 }[job.pay_frequency as string] ?? 26;
-      const remainingPeriods = Math.round(periodsPerYear * (1 - fraction));
-      projectedFedWithheld += extraWH * remainingPeriods;
-    }
+    // The observed rate can already include the current Line 4(c); do not add it again.
 
     const saneMax = Number(job.annual_salary) * 3;
     let capped = false;
-    if (projectedGross > saneMax) {
-      const capRatio = Number(job.annual_salary) / projectedGross;
-      projectedGross = Number(job.annual_salary);
-      projectedFedWithheld = Math.round(projectedFedWithheld * capRatio);
-      projectedSSWithheld = Math.round(projectedSSWithheld * capRatio);
-      projectedMedWithheld = Math.round(projectedMedWithheld * capRatio);
+    let futureScale = 1;
+    if (!former && saneMax > 0 && projectedGross > saneMax) {
+      const actual = Number(snap.ytd_gross);
+      const cappedGross = Math.max(Number(job.annual_salary), actual);
+      futureScale = projectedGross > actual ? (cappedGross - actual) / (projectedGross - actual) : 0;
+      projectedGross = cappedGross;
+      projectedFedWithheld = scaleFuture(Number(snap.ytd_federal_withheld), projectedFedWithheld, futureScale);
+      projectedSSWithheld = scaleFuture(Number(snap.ytd_ss_withheld), projectedSSWithheld, futureScale);
+      projectedMedWithheld = scaleFuture(Number(snap.ytd_medicare_withheld), projectedMedWithheld, futureScale);
       capped = true;
       hasWarnings = true;
     }
-    if (insufficientData) hasWarnings = true;
+    if (insufficientData || Number(snap.ytd_hsa ?? 0) > 0) hasWarnings = true;
 
     jobProjections.push({
       jobId: job.id, jobName: job.name,
@@ -96,11 +96,12 @@ export function computeProjections(
       id: job.id, name: job.name, incomeSource: 'paystub',
       annualSalary: projectedGross,
       federalWithholdingYTD: projectedFedWithheld,
+      projectedFederalWithholding: projectedFedWithheld,
       socialSecurityWithholdingYTD: projectedSSWithheld,
       medicareWithholdingYTD: projectedMedWithheld,
-      traditional401k: snap.ytd_traditional_401k ? Math.round(Number(snap.ytd_traditional_401k) / fraction) : undefined,
-      roth401k: snap.ytd_roth_401k ? Math.round(Number(snap.ytd_roth_401k) / fraction) : undefined,
-      hsaContributions: snap.ytd_hsa ? Math.round(Number(snap.ytd_hsa) / fraction) : undefined,
+      traditional401k: snap.ytd_traditional_401k == null ? undefined : scaleFuture(Number(snap.ytd_traditional_401k), extrapolate(Number(snap.ytd_traditional_401k)), futureScale),
+      roth401k: snap.ytd_roth_401k == null ? undefined : scaleFuture(Number(snap.ytd_roth_401k), extrapolate(Number(snap.ytd_roth_401k)), futureScale),
+      hsaContributions: snap.ytd_hsa == null ? undefined : scaleFuture(Number(snap.ytd_hsa), extrapolate(Number(snap.ytd_hsa)), futureScale),
       payFrequency: job.pay_frequency as JobInput['payFrequency'],
       startMonth: job.start_month ?? 1,
     });
@@ -116,7 +117,7 @@ export function computeProjections(
     itemizedDeductions,
     estimatedPaymentsYTD,
     dependents,
-    childTaxCreditEligible: 0,
+    childTaxCreditEligible,
     otherDependentsEligible: 0,
   };
 
